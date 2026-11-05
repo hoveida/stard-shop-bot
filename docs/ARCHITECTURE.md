@@ -37,7 +37,8 @@
 | `bot/risk.py`, `bot/finance.py`, `bot/systools.py`, `bot/campaigns.py` | ریسک، گزارش مالی، ابزارهای سیستم، اعلان‌های زمان‌بندی‌شده |
 | `bot/simulator.py` | شبیه‌ساز Stard برای Test Mode |
 | `bot/logging_setup.py` | لاگ JSON با Correlation ID و حذف secret |
-| `bot/handlers/` | تلگرام: `user`, `shop`, `topup`, `prices` (گروه)، `admin`, `ops`, `admin_shop`, `finance` |
+| `bot/kyc.py` | احراز هویت: کارت (Luhn، ماسک)، تصمیم اتمیک مدیر، سقف شارژ روزانه |
+| `bot/handlers/` | تلگرام: `user`, `shop`, `topup`, `kyc`, `prices` (گروه)، `admin`, `ops`, `admin_shop`, `finance`, `kyc_admin` |
 
 ## تضمین‌های مالی (چرا هیچ عملیاتی دو بار انجام نمی‌شود)
 
@@ -50,6 +51,8 @@
 | برگشت دوباره | شرط `refunded = 0` + کلید اصلی `refunds.order_id` + تراکنش واحد؛ سفارش `completed` هرگز برگشت نمی‌خورد |
 | هم تحویل هم برگشت | برگشت دستی مدیر اول در Stard لغو می‌کند؛ سفارش «پاسخ‌گم‌شده» قبلش با همان کلید استعلام می‌شود |
 | شارژ دوباره | `UPDATE topups … WHERE status = 'pending'`؛ رسید تکراری با `UNIQUE(user_id, file_unique_id)` |
+| دو تصمیم روی یک احراز هویت | `UPDATE kyc_cards … WHERE status = 'pending'` + audit در همان تراکنش؛ مدیر دوم «قبلاً بررسی شده» |
+| دور زدن سقف شارژ روزانه | جمع شارژهای امروز و درج رسید در یک تراکنش (`create_topup(daily_limit=…)`) |
 | فروش با ضرر | قیمت نهایی، تخفیف، پاداش معرف همه کف قیمت خرید از Stard دارند |
 | کد تخفیف بیش از سقف | `UPDATE coupons SET used = used + 1 WHERE used < max_uses` + `PRIMARY KEY(code, user_id)` |
 | موجودی انبار منفی | `UPDATE product_controls SET sold = sold + q WHERE stock - sold >= q` در همان تراکنش |
