@@ -4,7 +4,7 @@
 name: auto-release
 on:
   push:
-    branches: [main, "claude/starship-bot-github-access-qggts8"]
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: write

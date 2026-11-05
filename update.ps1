@@ -8,7 +8,7 @@
 # قبل از اجرا ربات را با Ctrl+C خاموش کنید.
 param(
     [string]$Ref = "",
-    [string]$Branch = "claude/starship-bot-github-access-qggts8"
+    [string]$Branch = "main"
 )
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot

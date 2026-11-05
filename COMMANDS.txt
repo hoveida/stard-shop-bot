@@ -13,7 +13,7 @@
 
   ۱. ربات را با Ctrl + C خاموش کنید
   ۲. فایل update.ps1 را از گیت‌هاب دانلود و در پوشه‌ی پروژه بگذارید:
-       curl.exe -L -o update.ps1 https://raw.githubusercontent.com/arad-afray/stard-shop-bot/claude/starship-bot-github-access-qggts8/update.ps1
+       curl.exe -L -o update.ps1 https://raw.githubusercontent.com/arad-afray/stard-shop-bot/main/update.ps1
   ۳. اجرا:
        powershell -ExecutionPolicy Bypass -File .\update.ps1
 
