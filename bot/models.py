@@ -84,6 +84,7 @@ topups = Table(
     Column("status", String(16), nullable=False, server_default="pending"),
     Column("admin_id", BigInteger),
     Column("created_at", T, nullable=False),
+    Column("card_id", Integer),                          # کارت تأییدشده‌ای که با آن واریز شده (kyc_cards.id)
 )
 Index("idx_topups_status", topups.c.status)
 Index("uq_topups_receipt", topups.c.user_id, topups.c.file_unique_id, unique=True)
@@ -313,3 +314,32 @@ broadcasts = Table(
     Column("created_at", T, nullable=False),
     Column("finished_at", T),
 )
+
+# ---------- v3.3: احراز هویت (KYC) ----------
+kyc_cards = Table(
+    "kyc_cards", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", BigInteger, nullable=False),
+    Column("card_number", String(16), nullable=False),   # شماره‌ی کامل؛ فقط مدیر کامل می‌بیند، همه‌جا ماسک‌شده
+    Column("holder", String(128), nullable=False),
+    Column("photo_id", String(256)),
+    Column("photo_unique_id", String(128)),
+    Column("photo_mode", String(16), nullable=False, server_default="note"),  # note | selfie
+    Column("status", String(16), nullable=False, server_default="pending"),   # pending | approved | rejected
+    Column("reason", String(256)),                       # دلیل رد
+    Column("admin_id", BigInteger),
+    Column("created_at", T, nullable=False),
+    Column("decided_at", T),
+)
+Index("idx_kyc_user", kyc_cards.c.user_id)
+Index("idx_kyc_status", kyc_cards.c.status)
+Index("idx_kyc_card", kyc_cards.c.card_number)
+
+kyc_messages = Table(
+    "kyc_messages", metadata,                            # نسخه‌ی هر مدیر از یک درخواست، برای ویرایش بعد از تصمیم
+    Column("kyc_id", Integer, nullable=False),
+    Column("chat_id", BigInteger, nullable=False),
+    Column("message_id", BigInteger, nullable=False),
+    PrimaryKeyConstraint("chat_id", "message_id"),
+)
+Index("idx_kyc_messages_kyc", kyc_messages.c.kyc_id)

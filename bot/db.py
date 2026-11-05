@@ -101,6 +101,18 @@ class CouponInvalid(Exception):
     pass
 
 
+class TopupLimitExceeded(Exception):
+    """سقف شارژ روزانه (احراز هویت) پر شده است."""
+
+    def __init__(self, limit: int, used: int):
+        super().__init__(f"daily top-up limit {limit} (used {used})")
+        self.limit, self.used = limit, used
+
+    @property
+    def remaining(self) -> int:
+        return max(0, self.limit - self.used)
+
+
 def build_url(database_url: str | None, database_path: str) -> str:
     if database_url:
         url = database_url.strip()
@@ -645,8 +657,12 @@ class Database:
 
     # ---------- شارژ ----------
     async def create_topup(self, uid: int, amount: int, photo_id: str,
-                           file_unique_id: str | None = None) -> tuple[int, bool]:
-        """(شناسه، تازه؟). همان رسید (file_unique_id) دو بار ثبت نمی‌شود."""
+                           file_unique_id: str | None = None, *, card_id: int | None = None,
+                           daily_limit: tuple[int, str] | None = None) -> tuple[int, bool]:
+        """(شناسه، تازه؟). همان رسید (file_unique_id) دو بار ثبت نمی‌شود.
+
+        daily_limit = (سقف، شروع روز به UTC): مجموع شارژهای در انتظار و تأییدشده‌ی امروز به‌علاوه‌ی این مبلغ
+        نباید از سقف بگذرد (داخل همان تراکنش، تا دو رسید هم‌زمان سقف را دور نزنند) ← TopupLimitExceeded."""
         if file_unique_id:
             ex = await self.one("SELECT id FROM topups WHERE user_id = :u AND file_unique_id = :f",
                                 {"u": uid, "f": file_unique_id})
@@ -654,9 +670,18 @@ class Database:
                 return ex["id"], False
         try:
             async with self.tx() as c:
-                tid = (await self._x(c, "INSERT INTO topups(user_id, amount, photo_id, file_unique_id, status, created_at) "
-                                        "VALUES(:u, :a, :p, :f, 'pending', :t) RETURNING id",
-                                     {"u": uid, "a": amount, "p": photo_id, "f": file_unique_id, "t": now()})).scalar_one()
+                if daily_limit is not None:
+                    limit, since = daily_limit
+                    used = _norm((await self._x(
+                        c, "SELECT COALESCE(SUM(amount), 0) FROM topups WHERE user_id = :u "
+                           "AND status IN ('pending', 'approved') AND created_at >= :s",
+                        {"u": uid, "s": since})).scalar())
+                    if used + amount > limit:
+                        raise TopupLimitExceeded(limit, used)
+                tid = (await self._x(c, "INSERT INTO topups(user_id, amount, photo_id, file_unique_id, status, "
+                                        "created_at, card_id) VALUES(:u, :a, :p, :f, 'pending', :t, :cid) RETURNING id",
+                                     {"u": uid, "a": amount, "p": photo_id, "f": file_unique_id, "t": now(),
+                                      "cid": card_id})).scalar_one()
         except IntegrityError:
             ex = await self.one("SELECT id FROM topups WHERE user_id = :u AND file_unique_id = :f",
                                 {"u": uid, "f": file_unique_id})
