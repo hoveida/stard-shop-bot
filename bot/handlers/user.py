@@ -17,6 +17,8 @@ from ..shop import Shop
 from ..stard_api import StardError
 from ..ui import (BTN_ACCOUNT, BTN_CANCEL, BTN_ORDERS, BTN_PRICES, BTN_REFERRAL, BTN_SUPPORT, JOIN_CHECK,
                   STATUS_LABEL, edit_or_send, join_menu, main_menu)
+from ..kyc import STATUS as KYC_STATUS, Kyc
+from .kyc import KYC_HOME
 from .prices import prices_text
 
 log = logging.getLogger(__name__)
@@ -86,6 +88,11 @@ async def account(message: Message, state: FSMContext, user: User, db: Database,
         b.button(text="🎁 پاداش روزانه", callback_data=REWARD_DAILY)
     if await shop.features.enabled("spin", user.id):
         b.button(text="🎡 گردونه‌ی شانس", callback_data=REWARD_SPIN)
+    kyc = Kyc(db)
+    kyc_line = ""
+    if (await kyc.config())["enabled"]:
+        kyc_line = f"\n🪪 احراز هویت: {KYC_STATUS[(await kyc.status(user.id))[0]]}"
+        b.button(text="🪪 احراز هویت", callback_data=KYC_HOME)
     b.adjust(2)
     await message.answer(
         "👤 <b>حساب کاربری</b>\n\n"
@@ -95,7 +102,7 @@ async def account(message: Message, state: FSMContext, user: User, db: Database,
         f"📦 تعداد سفارش‌ها: {orders:,}\n"
         f"🛒 مجموع خرید: {fmt_toman(spent)}\n"
         f"👥 زیرمجموعه‌ها: {await db.count_referrals(user.id):,}\n"
-        f"📅 عضویت: {user.created_at[:10]}{vip}{offer_text}",
+        f"📅 عضویت: {user.created_at[:10]}{kyc_line}{vip}{offer_text}",
         reply_markup=b.as_markup() if b.buttons else None)
 
 

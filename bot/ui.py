@@ -294,7 +294,7 @@ class Fn(CallbackData, prefix="fn"):
 
 
 def admin_menu(shop_open: bool, is_test: bool, is_owner: bool, *, maintenance: bool = False,
-               pending_topups: int = 0, manual: int = 0) -> InlineKeyboardMarkup:
+               pending_topups: int = 0, manual: int = 0, pending_kyc: int = 0) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     b.button(text="🔄 به‌روزرسانی داشبورد", callback_data=Adm(name="home"))
     b.button(text="📊 آمار", callback_data=Adm(name="stats"))
@@ -302,6 +302,7 @@ def admin_menu(shop_open: bool, is_test: bool, is_owner: bool, *, maintenance: b
     b.button(text="👥 کاربران", callback_data=Adm(name="user"))
     b.button(text="🧾 سفارش‌ها" + (f" ({manual})" if manual else ""), callback_data=Adm(name="orders"))
     b.button(text="💳 شارژها" + (f" ({pending_topups})" if pending_topups else ""), callback_data=Adm(name="topups"))
+    b.button(text="🪪 احراز هویت" + (f" ({pending_kyc})" if pending_kyc else ""), callback_data=Adm(name="kyc"))
     b.button(text="💰 درصد سود", callback_data=Adm(name="profit"))
     b.button(text="🛍 مدیریت فروشگاه", callback_data=SA(a="menu"))
     b.button(text="📣 بازاریابی", callback_data=SA(a="mkt"))

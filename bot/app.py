@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, ErrorEvent, Message
 from .admins import Admins
 from .config import Settings
 from .db import Database
-from .handlers import admin, admin_shop, finance, ops, prices, shop as shop_handlers, topup, user
+from .handlers import admin, admin_shop, finance, kyc, kyc_admin, ops, prices, shop as shop_handlers, topup, user
 from .logging_setup import correlation_id, redact
 from .middlewares import JoinChecker, JoinMiddleware, ThrottleMiddleware, UserMiddleware
 from .shop import Shop
@@ -55,15 +55,15 @@ class CorrelationMiddleware(BaseMiddleware):
 
 def build_routers() -> Router:
     """روتر چت خصوصی (همه‌ی فروشگاه) + روتر گروه (فقط قیمت)."""
-    for r in (user.router, admin.router, ops.router, admin_shop.router, finance.router, topup.router,
-              shop_handlers.router, prices.router):
+    for r in (user.router, admin.router, kyc_admin.router, ops.router, admin_shop.router, finance.router,
+              kyc.router, topup.router, shop_handlers.router, prices.router):
         r._parent_router = None  # روترها ماژول‌سطح‌اند؛ اجازه‌ی اتصال دوباره (مثلاً در تست‌ها)
     private = Router(name="private")
     private.message.filter(F.chat.type == "private")
     private.callback_query.filter(F.message.chat.type == "private")
     # ترتیب مهم است: انصراف و منوی اصلی قبل از فرم‌های چندمرحله‌ای
-    private.include_routers(user.router, admin.router, ops.router, admin_shop.router, finance.router, topup.router,
-                            shop_handlers.router)
+    private.include_routers(user.router, admin.router, kyc_admin.router, ops.router, admin_shop.router,
+                            finance.router, kyc.router, topup.router, shop_handlers.router)
     root = Router(name="root")
     root.include_routers(prices.router, private)
     return root

@@ -20,6 +20,7 @@ from ..admins import Admins
 from ..backups import BackupError, BackupManager
 from ..config import Settings
 from ..db import Database, InsufficientBalance
+from ..kyc import STATUS as KYC_STATUS, Kyc, fmt_card, mask
 from ..middlewares import JoinChecker
 from ..pricing import CATEGORIES, fmt_toman, to_float, to_int
 from ..shop import COUPON_RE, Shop, ShopError
@@ -78,7 +79,8 @@ async def _home(shop: Shop, db: Database, settings: Settings, is_owner: bool, qu
     s = await db.stats()
     maint, _ = await shop.maintenance()
     kb = admin_menu(await shop.is_open(), settings.is_test, is_owner, maintenance=maint,
-                    pending_topups=s["pending_topups"], manual=s["manual"])
+                    pending_topups=s["pending_topups"], manual=s["manual"],
+                    pending_kyc=await Kyc(db).count_pending())
     quick = quick_actions()
     quick.attach(InlineKeyboardBuilder.from_markup(kb))
     return await command_center_text(db, shop, queue, settings, services), quick.as_markup()
@@ -230,12 +232,19 @@ async def cb_topups(cb: CallbackQuery, db: Database, bot: Bot):
         try:
             await bot.send_photo(cb.from_user.id, t["photo_id"],
                                  caption=f"💳 <b>درخواست شارژ #{t['id']}</b>\n👤 {uname} 🆔 <code>{t['user_id']}</code>\n"
-                                         f"💵 مبلغ: <b>{fmt_toman(t['amount'])}</b>\n📅 {t['created_at']}",
+                                         f"💵 مبلغ: <b>{fmt_toman(t['amount'])}</b>\n📅 {t['created_at']}"
+                                         + await _paid_from(db, t),
                                  reply_markup=topup_review_menu(t["id"]))
         except TelegramBadRequest as e:
             log.warning("topup photo %s: %s", t["id"], e)
     if len(rows) > 20:
         await cb.message.answer(f"… و {len(rows) - 20:,} درخواست دیگر. بعد از بررسی این‌ها دوباره بزنید.")
+
+
+async def _paid_from(db: Database, t) -> str:
+    """کارت تأییدشده‌ای که کاربر گفته با آن واریز کرده (ماسک‌شده)."""
+    card = await Kyc(db).get(t["card_id"]) if t.get("card_id") else None
+    return f"\n💳 از کارت: <code>{mask(card['card_number'])}</code> ({escape(card['holder'])})" if card else ""
 
 
 @router.callback_query(Adm.filter(F.name.in_({"tp_ok", "tp_no"})))
@@ -292,6 +301,11 @@ async def _user_card(db: Database, uid: int):
     level = await Commerce(db).user_level(uid)
     offers = [c for c in await db.list_coupons(user_id=uid) if c["active"]]
     ref = f"\n👤 معرف: <code>{u.referrer_id}</code>" if u.referrer_id else ""
+    kyc = Kyc(db)
+    kst, _ = await kyc.status(uid)
+    kyc_line = f"\n🪪 احراز هویت: {KYC_STATUS[kst]}" + "".join(
+        f"\n   • <code>{fmt_card(c['card_number'])}</code> {escape(c['holder'])} — {KYC_STATUS.get(c['status'], '')}"
+        for c in (await kyc.cards(uid))[:5])
     text = (f"👤 <b>{escape(u.first_name or '')}</b> {('@' + escape(u.username)) if u.username else ''}\n"
             f"🆔 <code>{u.id}</code> | زبان: {escape(u.language_code or '—')}\n"
             f"💰 موجودی: <b>{fmt_toman(u.balance)}</b>\n"
@@ -300,7 +314,7 @@ async def _user_card(db: Database, uid: int):
             f"👥 زیرمجموعه‌ها: {await db.count_referrals(uid):,} | 🎁 پاداش: {fmt_toman(await db.referral_earnings(uid))}{ref}\n"
             f"👑 VIP: {escape(level['name']) + (' (خودکار)' if level['source'] == 'auto' else '') if level else '—'}"
             f"{(' تا ' + level['ends_at'][:10]) if level and level.get('ends_at') else ''}\n"
-            f"🎟 پیشنهادهای فعال: {', '.join(c['code'] for c in offers) or '—'}\n"
+            f"🎟 پیشنهادهای فعال: {', '.join(c['code'] for c in offers) or '—'}{kyc_line}\n"
             f"🛡 امتیاز ریسک: {u.risk_score}{' | ⛔️ ' + escape(u.ban_reason or '') if u.banned else ''}\n"
             f"🕒 آخرین فعالیت: {(u.last_seen or '—')[:16].replace('T', ' ')} | آخرین سفارش: "
             f"{(st['last_order'] or '—')[:10]}\n"
@@ -1078,6 +1092,7 @@ async def cb_settings(cb: CallbackQuery, db: Database):
         lines.append(f"{label}: {shown}")
         b.button(text=f"✏️ {label}", callback_data=Adm(name="sset", arg=key))
     b.button(text="📨 گزارش روزانه", callback_data=Adm(name="drep"))
+    b.button(text="🪪 احراز هویت", callback_data=Adm(name="kyc"))
     b.adjust(1)
     await edit_or_send(cb.message, "\n".join(lines), back_admin(b))
     await cb.answer()
