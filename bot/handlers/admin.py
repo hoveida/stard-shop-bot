@@ -966,17 +966,37 @@ async def group_test_value(message: Message, state: FSMContext, db: Database, sh
 
 
 # ---------- کیف پول Stard ----------
+CHARGING_GUIDE = (
+    "💡 <b>راهنمای شارژ: دو موجودی جدا</b>\n"
+    "1️⃣ <b>کیف پول کاربران داخل ربات</b>: کاربر با «💳 شارژ کیف پول» مبلغ را به کارت <b>شما</b> کارت‌به‌کارت می‌کند "
+    "و عکس رسید را می‌فرستد؛ بعد از تأیید شما در «💳 شارژها» موجودی‌اش در ربات زیاد می‌شود. کارت مقصد از "
+    "⚙️ تنظیمات ← 💳 شماره کارت (و 👤 نام صاحب کارت) تنظیم می‌شود.\n"
+    "2️⃣ <b>کیف پول Stard API (موجودی خود شما)</b>: همان حساب Stard Market که کلید API در داشبورد توسعه‌دهنده به آن "
+    "وصل است؛ هزینه‌ی هر سفارش از همین موجودی کم می‌شود. شارژ آن: به <b>تومان</b> با کارت‌به‌کارت داخل "
+    "@Stard_marketbot ← «افزایش موجودی»، یا با <b>TON</b>. با <code>STARD_PAY_CURRENCY=IRT</code> در .env سفارش‌ها از "
+    "موجودی تومانی پرداخت می‌شوند.\n"
+    "⚠️ پولی که کاربران به کارت شما می‌ریزند خودکار به Stard نمی‌رود؛ موجودی API را خودتان شارژ نگه دارید."
+)
+TEST_MODE_LABEL = {"off": "خاموش", "admins": "فقط مدیرها", "all": "همه‌ی کاربران"}
+
+
 @router.callback_query(Adm.filter(F.name == "wallet"))
 async def cb_wallet(cb: CallbackQuery, shop: Shop):
+    pay = (shop.pay_currency or "").upper() or "پیش‌فرض داشبورد"
     try:
         w = await shop.api.wallet()
         ping = await shop.api.ping()
     except StardError as e:
-        await cb.answer(f"خطا: {e.code}", show_alert=True)
+        await edit_or_send(cb.message,
+                           f"🏦 <b>کیف پول Stard API</b>\n\n⚠️ موجودی خوانده نشد: <code>{escape(e.code)}</code>\n"
+                           f"💱 ارز پرداخت سفارش‌ها: <b>{escape(pay)}</b>\n\n{CHARGING_GUIDE}", back_admin())
+        await cb.answer()
         return
-    bal = "\n".join(f"• {b['currency']}: <b>{b['amount']:,}</b>" if isinstance(b.get("amount"), int)
-                    else f"• {b.get('currency')}: <b>{b.get('amount')}</b>" for b in w.get("balances", []))
+    bal = "\n".join(f"• {escape(str(b.get('currency')))}: <b>{b['amount']:,}</b>" if isinstance(b.get("amount"), int)
+                    else f"• {escape(str(b.get('currency')))}: <b>{escape(str(b.get('amount')))}</b>"
+                    for b in w.get("balances", []))
     env = "🧪 test (پول آزمایشی)" if w.get("environment") == "test" else "🔴 live (پول واقعی)"
+    bot_mode = TEST_MODE_LABEL[await shop.test_mode()]
     status_line = ""
     with contextlib.suppress(StardError, KeyError, TypeError):
         st = await shop.api.status()
@@ -998,9 +1018,10 @@ async def cb_wallet(cb: CallbackQuery, shop: Shop):
     key = ping.get("key") or {}
     await edit_or_send(
         cb.message,
-        f"🏦 <b>کیف پول Stard API</b>\n\nمحیط: {env}\n{bal or '—'}\n"
+        f"🏦 <b>کیف پول Stard API</b>\n\nمحیط کلید API: {env}\n🧪 حالت آزمایشی ربات: {bot_mode}\n"
+        f"💰 <b>موجودی لحظه‌ای</b>\n{bal or '—'}\n💱 ارز پرداخت سفارش‌ها: <b>{escape(pay)}</b>\n"
         f"{escape(w.get('note') or '')}{status_line}\n\n🔑 کلید: <code>{escape(str(key.get('display', '')))}</code>\n"
-        f"دسترسی‌ها: {escape(', '.join(key.get('scopes', [])))}{tx_lines}",
+        f"دسترسی‌ها: {escape(', '.join(key.get('scopes', [])))}{tx_lines}\n\n{CHARGING_GUIDE}",
         back_admin())
     await cb.answer()
 
@@ -1085,7 +1106,8 @@ PANEL_HELP = (
     "• پول کاربر هیچ‌وقت دو بار کم نمی‌شود؛ سفارش ناموفق خودکار برگشت می‌خورد.\n"
     "• قبل از هر به‌روزرسانی خودکار پشتیبان گرفته می‌شود و اگر مشکلی پیش بیاید نسخه‌ی قبلی برمی‌گردد.\n"
     "• برای امتحان بدون خرج پول واقعی: 🛍 مدیریت فروشگاه ← 🧪 حالت آزمایشی.\n"
-    "• نسخه‌ی فعلی ربات پایین صفحه‌ی اصلی پنل نوشته شده است."
+    "• نسخه‌ی فعلی ربات پایین صفحه‌ی اصلی پنل نوشته شده است.\n\n"
+    + CHARGING_GUIDE + "\n(موجودی لحظه‌ای API و حالت test/live: 🛠 سیستم ← 🏦 کیف پول Stard)"
 )
 
 
