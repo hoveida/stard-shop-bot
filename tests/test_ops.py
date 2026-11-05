@@ -15,7 +15,12 @@ from bot.config import Settings
 from bot.db import Database
 from bot.locks import DistributedLock
 from bot.updater import ReleaseInfo, Updater, parse_version
+from bot.migrations_runner import all_revisions, head_revision
 from tests.conftest import TEST_DATABASE_URL, new_db
+
+# مخزن‌های ساختگی آپدیت همه‌ی مهاجرت‌های فعلی را دارند و نسخه‌ی «جدید» یک مهاجرت بیشتر
+LOCAL_REVS = [f"{r}_m" for r, _ in all_revisions()]
+NEXT_REV = f"{int(head_revision()) + 1:04d}"
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -176,7 +181,7 @@ def test_migrate_cli_downgrade_and_upgrade(tmp_path):
     run = lambda *a: subprocess.run([sys.executable, "-m", "bot.migrate", *a], cwd=ROOT, env=env,  # noqa: E731
                                     capture_output=True, text=True, timeout=120)
     r = run()
-    assert r.returncode == 0 and "now at 0004" in r.stdout, r.stdout + r.stderr
+    assert r.returncode == 0 and f"now at {head_revision()}" in r.stdout, r.stdout + r.stderr
     r = run("--to", "0002")
     assert r.returncode == 0 and "now at 0002" in r.stdout
     assert run("--check").returncode == 1
@@ -231,7 +236,7 @@ def repo(tmp_path):
     _git(origin, "init", "-q", "-b", "main")
     (origin / "bot").mkdir()
     (origin / "bot" / "migrations" / "versions").mkdir(parents=True)
-    for rev in ("0001_a", "0002_b", "0003_c", "0004_d"):
+    for rev in LOCAL_REVS:
         (origin / "bot" / "migrations" / "versions" / f"{rev}.py").write_text("")
     (origin / "bot" / "__init__.py").write_text(f'__version__ = "{__version__}"\n')
     (origin / "requirements.txt").write_text("")
@@ -239,7 +244,7 @@ def repo(tmp_path):
     old = _git(origin, "commit", "-qm", "old")
     subprocess.run(["git", "clone", "-q", str(origin), str(install)], check=True)
     (origin / "bot" / "__init__.py").write_text('__version__ = "99.0.0"\nMIN_PYTHON = (3, 10)\n')
-    (origin / "bot" / "migrations" / "versions" / "0005_e.py").write_text("")
+    (origin / "bot" / "migrations" / "versions" / f"{NEXT_REV}_e.py").write_text("")
     _git(origin, "add", "-A")
     new = _git(origin, "commit", "-qm", "new")
     _git(origin, "tag", "v99.0.0")
@@ -263,7 +268,7 @@ def _runner(fail_on: str | None = None, log: list | None = None):
         if fail_on and fail_on in joined:
             return 1, f"{fail_on} exploded"
         if "bot.migrate" in joined:
-            return 0, "now at 0005"
+            return 0, f"now at {NEXT_REV}"
         return 0, "OK"
     return run
 
@@ -377,7 +382,7 @@ async def test_archive_mode_update_validates_checksum_and_extracts(db, tmp_path,
     monkeypatch.setattr("bot.updater.install_mode", lambda root: "archive")
     src = tmp_path / "src"
     (src / "bot" / "migrations" / "versions").mkdir(parents=True)
-    for rev in ("0001_a", "0002_b", "0003_c", "0004_d"):
+    for rev in LOCAL_REVS:
         (src / "bot" / "migrations" / "versions" / f"{rev}.py").write_text("")
     (src / "bot" / "__init__.py").write_text('__version__ = "99.0.0"\n')
     (src / "requirements.txt").write_text("")
@@ -409,7 +414,7 @@ async def test_archive_mode_update_validates_checksum_and_extracts(db, tmp_path,
     assert state.status == "restarting", state
     assert '99.0.0' in (install / "bot" / "__init__.py").read_text()
     assert (install / ".env").read_text() == "SECRET=keep" and (install / "data" / "shop.db").read_text() == "db"
-    assert (install / "bot" / "migrations" / "versions" / "0004_d.py").exists()
+    assert (install / "bot" / "migrations" / "versions" / f"{LOCAL_REVS[-1]}.py").exists()
     # فایل دست‌کاری‌شده رد می‌شود
     sums = "0" * 64 + f"  {zname}\n"
     (install / "bot" / "__init__.py").write_text(f'__version__ = "{__version__}"\n')
