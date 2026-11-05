@@ -339,10 +339,11 @@ async def test_two_updates_cannot_run_concurrently(db, tmp_path, repo, monkeypat
 
 
 # ---------- Restart خودکار ----------
+@pytest.mark.skipif(os.name != "posix", reason="run.sh is the POSIX supervisor (bash, ':'-separated PATH)")
 def test_run_sh_restarts_and_rolls_back(tmp_path):
     work = tmp_path / "w"
     work.mkdir()
-    (work / "run.sh").write_text(open(os.path.join(ROOT, "run.sh")).read())
+    (work / "run.sh").write_text(open(os.path.join(ROOT, "run.sh"), encoding="utf-8").read())
     (work / "data").mkdir()
     counter = tmp_path / "n"
     counter.write_text("0")

@@ -111,7 +111,7 @@ def _scan_tree_for_secrets(root: str) -> list[str]:
             for p in _PATTERNS[:5]:  # الگوهای توکن/کلید (نه الگوهای عمومی مثل Bearer)
                 for m in p.finditer(text):
                     val = m.group(0)
-                    if any(x in val for x in ("xxxx", "ABC", "fake", "test", "example", "your", "AAH")) or "tests/" in path:
+                    if any(x in val for x in ("xxxx", "ABC", "fake", "test", "example", "your", "AAH")) or "tests/" in path.replace(os.sep, "/"):
                         continue
                     out.append(f"{os.path.relpath(path, root)}: {val[:6]}…")
     return out

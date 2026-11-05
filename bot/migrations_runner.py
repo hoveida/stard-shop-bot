@@ -35,7 +35,11 @@ CREATE TABLE IF NOT EXISTS ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id
 
 
 def alembic_config() -> Config:
-    cfg = Config(os.path.join(ROOT, "alembic.ini"))
+    """پیکربندی Alembic بدون خواندن alembic.ini.
+
+    Alembic فایل ini را با encoding سیستم‌عامل می‌خواند؛ روی ویندوزی که locale آن UTF-8 نیست (حتی با PYTHONUTF8=1)
+    خواندن فایل شکست می‌خورد و مهاجرت خودکار هنگام شروع/آپدیت اجرا نمی‌شد. ربات فقط script_location لازم دارد."""
+    cfg = Config()
     cfg.set_main_option("script_location", os.path.join(ROOT, "bot", "migrations"))
     return cfg
 
